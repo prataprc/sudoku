@@ -1,0 +1,104 @@
+h2. sudoku application
+
+Download the source tar ball and untar them in your local home, from now on
+this directory will be referred to as //<games-directory>// . Build the
+source code using make,
+
+{{{ Code sh
+    $ cd <games-directory>
+    $ make
+}}}
+
+This will build the application source code and make it available under,
+//<games-directory>/ebin//.
+
+Export the environment variable //ERL_LIBS// in your shell as,
+{{{ Code sh
+    $ export ERL_LIBS=<games-directory>
+}}}
+
+The sudoku application can be started by,
+
+{{{ Code sh
+$ erl
+Erlang R13B03 (erts-5.7.4) [source] [smp:8:8] [rq:8] [async-threads:0] [hipe] [kernel-poll:false]
+
+Eshell V5.7.4  (abort with ^G) 
+}}}
+
+{{{ Code erlang
+1> application:load(games).     %% Load the application
+2> application:start(games).    %% Start the application
+3> sudoku_test:start_link([]).  %% Start the sudoku test server
+}}}
+
+You can now use the exported apis to play around with the alogrithm. 
+
+h2. sudoku_gen
+
+This module contains APIs to generate sudoku puzzles. Let us see them one by
+one,
+
+h3. generate random
+
+> [<PRE generate( random, Size, Elimit ) >]
+
+This api generates a random puzzle, pre-populating with //Elimit// number of
+elements. Note that the generates puzzle might not be a valid one.
+For a 9x9 table size, //Size// is 3, and for a 16x16 table size, //Size// is 4.
+Returns a puzzle table as nested tuples.
+
+h3. generate valid
+
+> [<PRE generate( valid, Size, Elimit ) >]
+
+This api generates a random puzzle, pre-populating with //Elimit// number of
+elements. The generated puzzle is always a valid one, sometimes it can takes a
+long time to generate a valid puzzle. For a 9x9 table size, //Size// is 3 and for
+a 16x16 table size, //Size// is 4.
+Returns a puzzle table as nested tuples.
+
+h3. generate switching
+
+> [<PRE generate( switching, Seed, Size, Elimit ) >]
+
+This api generates a valid puzzle by randomly switching elements of a
+pre-solved puzzle. It then restricts the pre-populated elements to //Elimit//
+making the remaing to Zero. This is the fastest way to generate a valid sudoku
+puzzle. To manage repeation, caller can supply a `Seed` value. Passing the
+same parameters always return the same table. For a 9x9 table size, //Size// is 3
+and for a 16x16 table size, //Size// is 4.
+Returns a puzzle table as nested tuples.
+
+Note that by changing the //Elimit// value it is possible to change the complexity
+of the puzzle.
+
+h2. sudoku_slv
+
+This module contains APIs to solve sudoku puzzles.
+
+h3. solve
+
+> [<PRE solve( Size, Table ) >]
+
+This api takes in a puzzle table of DxD size. For a 9x9 table size, //Size// is
+3 and for 16x16 table size, //Size// is 4. It uses a double recursive
+backtracking algorithm to solve the puzzle.
+On success, returns,
+[<PRE
+    {passed, solved-table}
+    {failed, unsolved-table}
+>]
+
+h2. application configuration
+
+The application can be configured for concurrency. Use src/games.app file and
+update the following parameters,
+
+: concurrent ::
+    true or false
+: procs      ::
+    integer value capping the maximum number of process that can
+    be spawned by the algorithm, concurrent must be true for this.
+
+After updating the games.app file, be sure to execute //make// once again.

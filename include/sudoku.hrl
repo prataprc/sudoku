@@ -1,0 +1,2 @@
+-record( rules, { elimit, remin, remax } ).
+-record( sudoku, { complexity, table, r, c, count, rules } ).
