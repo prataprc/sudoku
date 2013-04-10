@@ -8,22 +8,14 @@
 start() ->
     application:start(ncurses),
     application:start(sudoku),
-    %ncdrv:app(sudoku),
-    %sudoku_wm:initialize(),
-    %sudoku_wst:initialize(),
-    %sudoku_wm:play(3),
-    %Reason = ncdrv:trapexit(),
-    %try sudoku_wm:initialize() of
-    %    Reason -> io:format("~p~n", [Reason])
-    %catch
-    %    X:Y ->
-    %        ncdrv:addstr( io_lib:format( "Exception type : ~p~n", [X] )),
-    %        ncdrv:addstr( io_lib:format( "Exception : ~p~n", [Y] ));
-    %    _:_ ->
-    %        ncdrv:addstr( io_lib:format( "Unknown exception" ))
-    %end,
-    timer:sleep(100),
+
+    ncdrv:app(sudoku),
+
+    sudoku_wm:initialize(),
+    sudoku_wst:initialize(),
+    sudoku_wm:play(3),
+    Reason = ncdrv:trapexit(),
+
     application:stop(sudoku),
     application:stop(ncurses),
-    %io:format("~p~n", [Reason]),
     erlang:halt().

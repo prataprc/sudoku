@@ -93,15 +93,8 @@ hidenumbers(S, Table, Difflty) ->
 
 init(_Args) ->
     process_flag(trap_exit, true),
-    %try sudoku_db:initdb() of
-    %    {ok, Tbl} -> {ok, #sgen{puzzledb=Tbl}}
-    %catch 
-    %    Type:Exc -> io:format("Exception in init ~p~n~p~n", [Type, Exc])
-    %end.
-    Tbl = sudoku_db:initdb(),
-    %io:format("~p~n", [10]),
-    %{ok, #sgen{puzzledb=Tbl}}.
-    {ok, #sgen{}}.
+    {ok, Tbl} = sudoku_db:initdb(),
+    {ok, #sgen{puzzledb=Tbl}}.
 
 
 handle_call({genrandom, S, Difflty}, _From, State) ->

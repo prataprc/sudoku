@@ -15,9 +15,7 @@
 %---- module APIs
 
 start_link(Args) ->
-    X = gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []),
-    io:format("~p~n", [X]),
-    X.
+    gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
 
 play(Complexity) ->
     gen_server:call(?MODULE, {play, Complexity}, infinity).
@@ -49,9 +47,10 @@ handle_call(initialize, _From, State) ->
     Win = ncdrv:newwin(Ys, Xs, Y, X),
     NewState = State#wm{win=Win, y=Y, x=X, rows=Ys, cols=Xs},
 
-    ncdrv:cbreak(),
+    ncdrv:raw(),
     ncdrv:noecho(),
     ncdrv:init_pairs(),
+
     ncdrv:win(?WIN_MAIN),
     ncdrv:wdom(domtree()),
 

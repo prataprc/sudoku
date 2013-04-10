@@ -14,7 +14,7 @@ initdb(DBFile, Opts) ->
 initdb() ->
     Home = os:getenv("HOME"),
     {ok, DBRoot} = application:get_env(dbroot),
-    DBFile = filename:join(Home, DBRoot, "puzzles.dets"),
+    DBFile = filename:join([Home, DBRoot, "puzzles.dets"]),
     Opts = [{access, read_write}, {auto_save, 180000}, {type, set}],
     initdb(DBFile, Opts).
 
