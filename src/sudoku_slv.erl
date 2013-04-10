@@ -52,18 +52,18 @@ psolve(Tables) ->
 %---- gen_server callbacks
 
 init( _Args ) ->
+    process_flag(trap_exit, true),
     ets:new(test, [set, named_table]),
     ets:insert(test, {busy, false}),
-    {ok, Concurrent} = application:get_env(concurrent),
-    { ok, [ {concurrent, Concurrent} ] }.
+    {ok, {}}.
 
 handle_call( {solve, S, Table}, _From, State ) ->
     ets:update_element(test, busy, {2, true}),
     Res = solve_( S, Table ),
     ets:update_element(test, busy, {2, false}),
     case Res of
-        { passed, _ } -> {reply, Res, State};
-        { failed, _ } -> {noreply, State}
+        {passed, _} -> {reply, Res, State};
+        {failed, _} -> {noreply, State}
     end;
 
 handle_call( {psolve, Tables}, _From, State ) ->
@@ -285,9 +285,9 @@ backtrack( elist, S, Table, R, C, E ) when is_integer(E) ->
     backtrack( elist, S, Table, R, C, [E] ).
 
 % ------ Concurrent logic
-concurrent() ->
+is_concurrent() ->
     {ok, Procs} = application:get_env(procs),
-    application:get_env(concurrent) =:= {ok, true}
+    (application:get_env(concurrent) =:= {ok, true})
         andalso
         length(processes()) < Procs.
 
@@ -323,6 +323,7 @@ entry( Frompid, S, Table, R, C, E ) ->
     erlang:process_flag(priority, low),
     Res = backtrack( elist, S, Table, R, C, [E | []] ),
     Frompid ! Res.
+
 %% --------- Concurrent logic
 
 
@@ -337,7 +338,7 @@ backtrack( reduce, S, Table, R, C ) ->
     false ->    %% Check whether the partially formed table is proper
         case sudoku_v:genvalid( S, Tnew ) of
         true ->     %% Looks like, so proceed with backtracking
-            case concurrent() of
+            case is_concurrent() of
                 true ->     %% Concurrent backtracking
                     spanout( S, Tnew, R, C, tblelement( Tnew, R, C ), [] );
                 false ->    %% Sequential backtracking

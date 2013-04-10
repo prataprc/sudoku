@@ -13,6 +13,8 @@
 -record(testcase, { complexity, elimit, count }).
 
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("ncurses/include/ncurses.hrl").
+
 -include("sudoku.hrl").
 
 pathologicalseq() ->
@@ -170,12 +172,10 @@ hdn_test_() ->
 
 
 sr_countlimit_test_() ->
-    [ ?_assert( not begin Rules = #rules{ elimit=10 },
-                          Tb = #sudoku{ count=9, rules=Rules },
+    [ ?_assert( not begin Tb = #puzzle{difficulty=10, count=9},
                           sudoku_gen:sr_countlimit( Tb ) end
               ),
-      ?_assert( begin Rules = #rules{ elimit=10 },
-                      Tb = #sudoku{ count=10, rules=Rules },
+      ?_assert( begin Tb = #puzzle{difficulty=10, count=10},
                       sudoku_gen:sr_countlimit( Tb ) end
               )
     ].
@@ -184,9 +184,8 @@ pr_row_test_() ->
     [ ?_assert(
             begin
                 Table = sudoku_slv:init_reduce( 2, test_table() ),
-                Tb = #sudoku{ complexity=2, table=Table, r=2, c=1,
-                             count=0, rules=#rules{ elimit=5 }
-                           },
+                Tb = #puzzle{complexity=2, difficulty=5, table=Table,
+                             r=2, c=1, count=0},
                 sudoku_gen:pr_row( 1, Tb )
             end
       ),
@@ -194,9 +193,8 @@ pr_row_test_() ->
             not
             begin
                 Table = sudoku_slv:init_reduce( 2, test_table() ),
-                Tb = #sudoku{ complexity=2, table=Table, r=2, c=1,
-                             count=0, rules=#rules{ elimit=5 }
-                           },
+                Tb = #puzzle{complexity=2, difficulty=5, table=Table,
+                             r=2, c=1, count=0},
                 sudoku_gen:pr_row( 2, Tb )
             end
       )
@@ -206,9 +204,8 @@ pr_col_test_() ->
     [ ?_assert(
             begin
                 Table = sudoku_slv:init_reduce( 2, test_table() ),
-                Tb = #sudoku{ complexity=2, table=Table, r=2, c=2,
-                             count=0, rules=#rules{ elimit=5 }
-                           },
+                Tb = #puzzle{complexity=2, difficulty=5, table=Table,
+                             r=2, c=2, count=0},
                 sudoku_gen:pr_col( 4, Tb )
             end
       ),
@@ -216,9 +213,8 @@ pr_col_test_() ->
             not
             begin
                 Table = sudoku_slv:init_reduce( 2, test_table() ),
-                Tb = #sudoku{ complexity=2, table=Table, r=2, c=2,
-                             count=0, rules=#rules{ elimit=5 }
-                           },
+                Tb = #puzzle{complexity=2, difficulty=5, table=Table,
+                             r=2, c=2, count=0},
                 sudoku_gen:pr_col( 1, Tb )
             end
       )
@@ -228,9 +224,8 @@ pr_stb_test_() ->
     [ ?_assert(
             begin
                 Table = sudoku_slv:init_reduce( 2, test_table() ),
-                Tb = #sudoku{ complexity=2, table=Table, r=1, c=1,
-                             count=0, rules=#rules{ elimit=5 }
-                           },
+                Tb = #puzzle{complexity=2, difficulty=5, table=Table,
+                             r=1, c=1, count=0},
                 sudoku_gen:pr_stb( 4, Tb )
             end
       ),
@@ -238,9 +233,8 @@ pr_stb_test_() ->
             not
             begin
                 Table = sudoku_slv:init_reduce( 2, test_table() ),
-                Tb = #sudoku{ complexity=2, table=Table, r=2, c=2,
-                             count=0, rules=#rules{ elimit=5 }
-                           },
+                Tb = #puzzle{complexity=2, difficulty=5, table=Table,
+                             r=2, c=2, count=0},
                 sudoku_gen:pr_stb( 1, Tb )
             end
       )
@@ -427,6 +421,6 @@ test( backtrack ) ->
         reduce, 2, sudoku_slv:init_reduce( 2, test_table() ), 1, 1 );
 test( solve ) ->
     Tbs = [ sudoku_gen:generate( 3, 20 ) || _I <- lists:seq(1,1)  ],
-    print_table( 3, (lists:nth( 1, Tbs ))#sudoku.table),
-    [ sudoku_slv:solve( 3, Table ) || #sudoku{table=Table}=_Tb <- Tbs ].
+    print_table( 3, (lists:nth( 1, Tbs ))#puzzle.table),
+    [ sudoku_slv:solve( 3, Table ) || #puzzle{table=Table}=_Tb <- Tbs ].
 

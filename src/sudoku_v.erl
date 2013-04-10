@@ -39,12 +39,13 @@ genvalid( S, Table ) ->
 
 
 % Validation logic for puzzle generator
-gentime( #sudoku{complexity=S, table=Table, rules=Rules} ) ->
+gentime( #puzzle{complexity=S, difficulty=Difflty, table=Table} ) ->
     Seq = lists:seq(1, S*S),
     Seq1 = lists:seq( 0, S*S-1 ),
+    Elimit = ?DFTY_LIMIT(S, Difflty),
     Fn = fun(L) -> is_repeat( lists:sort( L )) end,
     not (
-      ( eintable(S, Table) =/= Rules#rules.elimit )
+      ( eintable(S, Table) =/= Elimit )
       or
       lists:any( Fn, [ tuple_to_list( element( I, Table )) || I <- Seq ])
       or

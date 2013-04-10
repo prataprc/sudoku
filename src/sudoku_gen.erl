@@ -54,56 +54,83 @@ start_link(Args) ->
 
 % Generate a fresh sudoku puzzle. The puzzle is randomly generated, so can be
 % a valid one or may not be.
-generate( random, S, Elimit ) ->
-    gen_server:call( ?MODULE, {genrandom, S, Elimit}, infinity );
+generate(random, S, Difflty) ->
+    gen_server:call( ?MODULE, {genrandom, S, Difflty}, infinity );
 
 % Repeatedly call generate(random,...) until a valid matrix is generated.
-generate( valid, S, Elimit ) ->
-    gen_server:call( ?MODULE, {genvalid, S, Elimit}, infinity ).
+generate(valid, S, Difflty) ->
+    gen_server:call( ?MODULE, {genvalid, S, Difflty}, infinity ).
 
 % Generate a sudoku puzzle based on a valid, solved puzzle, by switching the
 % numbers.
-generate( switching, Seed, S, Elimit ) ->
-    gen_server:call( ?MODULE, {genswitching, Seed, S, Elimit}, infinity ).
+generate(switching, Seed, S, Difflty) ->
+    gen_server:call( ?MODULE, {genswitching, Seed, S, Difflty}, infinity );
 
-switchnumbers( S, Table, Num1, Num2 ) ->
+generate(populate, S, Difflty, Count) ->
+    Name = puzzledb(),
+    Puzzles = [ generate(valid, S, Difflty) || _ <- lists:seq(1, Count) ],
+    [ sudoku_db:insert(Name, {S, Puzzle}) || Puzzle <- Puzzles ].
+
+puzzledb() ->
+    gen_server:call( ?MODULE, puzzledb, infinity).
+
+%---- Utility functions
+
+switchnumbers(S, Table, Num1, Num2) ->
     switch( Num1, Num2, S, Table, 1, 1 ).
 
-switchnumbers( S, Table ) ->
+switchnumbers(S, Table) ->
     N = S*S,
     Num  = random:uniform( N ),
     Num1 = random:uniform( N ),
     Num2 = if Num1 =:= Num -> ((Num1 + 1) rem N) + 1 ; true -> Num end,
     switch( Num1, Num2, S, Table, 1, 1 ).
 
-hidenumbers( S, Table, Elimit ) ->
-    hidenumbers( S, Table, Elimit, S*S*S*S ).
+hidenumbers(S, Table, Difflty) ->
+    hidenumbers( S, Table, ?DFTY_LIMIT(S, Difflty), S*S*S*S ).
 
 %---- gen_server callbacks
 
-init( _Args ) ->
-    { ok, [ {concurrent, application:get_env(concurrent)} ] }.
+init(_Args) ->
+    process_flag(trap_exit, true),
+    %try sudoku_db:initdb() of
+    %    {ok, Tbl} -> {ok, #sgen{puzzledb=Tbl}}
+    %catch 
+    %    Type:Exc -> io:format("Exception in init ~p~n~p~n", [Type, Exc])
+    %end.
+    Tbl = sudoku_db:initdb(),
+    %io:format("~p~n", [10]),
+    %{ok, #sgen{puzzledb=Tbl}}.
+    {ok, #sgen{}}.
 
-handle_call( {genrandom, S, Elimit}, _From, State ) ->
-    { reply, genrandom(S, Elimit), State };
 
-handle_call( {genvalid, S, Elimit}, _From, State ) ->
-    { reply, genvalid(S, Elimit), State };
+handle_call({genrandom, S, Difflty}, _From, State) ->
+    { reply, genrandom(S, Difflty), State };
 
-handle_call( {genswitching, Seed, S, Elimit}, _From, State ) ->
-    { reply, genswitching(Seed, S, Elimit), State }.
+handle_call({genvalid, S, Difflty}, _From, State) ->
+    { reply, genvalid(S, Difflty), State };
 
-handle_cast( Request, State )->
+handle_call({genswitching, Seed, S, Difflty}, _From, State) ->
+    { reply, genswitching(Seed, S, Difflty), State };
+
+handle_call(puzzledb, _From, State) ->
+    { reply, State#sgen.puzzledb, State }.
+
+
+handle_cast(Request, State) ->
     io:format("cast ~w ~w~n", [Request, State]),
     {noreply, State}.
+
 
 handle_info( _Info, State )->
     %%io:format("info ~w ~w~n", [Info, State]),
     {noreply, State}.
 
+
 terminate( Reason, State )->
     io:format("terminate ~w ~w~n", [Reason, State]),
     {noreply, State}.
+
 
 code_change( OldVsn, State, _Extra )->
     io:format("codechange ~w ~w~n", [OldVsn, State]),
@@ -113,50 +140,53 @@ code_change( OldVsn, State, _Extra )->
 %---- module local functions
 
 % Randomly generate a number matrix and hope that it is a valid sudoku matrix.
-genrandom( S, Elimit ) ->
-    Sdk_init = #sudoku{ complexity=S, 
+genrandom(S, Difflty) ->
+    Sdk_init = #puzzle{ complexity=S,
+                        difficulty=Difflty,
                         table=init_table( S ),
                         r=1,         %% Initial count
                         c=1,         %% Initial count
-                        count=0,     %% Numbers in the table
-                        rules=#rules{ elimit=Elimit }
+                        count=0      %% Numbers in the table
                       },
     {A1, A2, A3} = now(),
     random:seed(A1, A2, A3),
-    (gen_table( Sdk_init, 5 ))#sudoku.table.
+    (gen_table( Sdk_init, 5 ))#puzzle.table.
 
-genvalid( S, Elimit ) ->
-    Table = genrandom( S, Elimit ),
-    case sudoku_slv:solve( S, Table ) of
+genvalid(S, Difflty) ->
+    Table = genrandom( S, Difflty ),
+    case sudoku_slv:solve(S, Table) of
         {passed, Tnew} -> Tnew;
-        {failed, _} -> genvalid( S, Elimit )
+        {failed, _} -> genvalid(S, Difflty)
     end.
 
-genswitching(Seed, S, Elimit) ->
+genswitching(Seed, S, Difflty) ->
     random:seed(Seed, Seed, Seed),
     Table = switchnumbers(S, reftable(S)),
-    hidenumbers(S, Table, Elimit).
+    hidenumbers(S, Table, Difflty).
 
-% List of Skip-Rule functors. Skip rules are based on 'rules.elimit' and a
+% List of Skip-Rule functors. Skip rules are based on `difficulty` level and a
 % randomized skip
-sr_countlimit(#sudoku{count=C, rules=R}) when C < R#rules.elimit -> false;
-sr_countlimit( _Sudoku ) -> true.
+sr_countlimit(#puzzle{complexity=S, difficulty=D, count=C}) ->
+    case C < ?DFTY_LIMIT(S, D) of
+        true -> false;
+        _ -> true
+    end.
 
-sr_random( #sudoku{complexity=S, rules=R} ) ->
-    random:uniform(S*S*S*S) > R#rules.elimit.
+sr_random( #puzzle{complexity=S, difficulty=D} ) ->
+    random:uniform(S*S*S*S) > ?DFTY_LIMIT(S, D).
 
 skipfunctors() -> [ fun sr_countlimit/1, fun sr_random/1 ].
 
 
 % Pick rules, don't pick if element 'E' is already found in the 
 % row / column / subtable of table.
-pr_row( E, #sudoku{table=Table, r=R} ) ->
+pr_row( E, #puzzle{table=Table, r=R} ) ->
     lists:all( fun(X) -> X =/= E end, tuple_to_list(element( R, Table )) ).
 
-pr_col( E, #sudoku{table=Table, c=C} ) ->
+pr_col( E, #puzzle{table=Table, c=C} ) ->
     lists:all( fun(X) -> X =/= E end, nthcol( C, Table ) ).
 
-pr_stb( E, #sudoku{complexity=S, table=Table, r=R, c=C} ) ->
+pr_stb( E, #puzzle{complexity=S, table=Table, r=R, c=C} ) ->
     N = nthsubtab( R, C, S ),
     lists:all( fun(X) -> X =/= E end, subtab( asflis, S, N, Table )).
 
@@ -191,20 +221,20 @@ hidenumbers( S, Table, Elimit, Count ) ->
 
 % Randomly pick an element based on pick rules and skip rules. Just pray 
 % that the randomly picked element collection is a valid sudoku puzzle.
-pick_number( #sudoku{}=_Sudoku, [] ) -> %% Execution should never reach here
+pick_number( #puzzle{}=_Puzzle, [] ) -> %% Execution should never reach here
     0;
-pick_number( #sudoku{}=Sudoku,  [H|T] ) ->
-    case lists:all( fun(F) -> F(H, Sudoku) end, pickfunctors() ) of
+pick_number( #puzzle{}=Puzzle,  [H|T] ) ->
+    case lists:all( fun(F) -> F(H, Puzzle) end, pickfunctors() ) of
         true  -> H;
-        false -> pick_number( Sudoku, T )
+        false -> pick_number( Puzzle, T )
     end.
 
-pick_number( #sudoku{ complexity=S, table=Table, r=R, c=C }=Sudoku ) ->
+pick_number( #puzzle{ complexity=S, table=Table, r=R, c=C }=Puzzle ) ->
     case tblelement( Table, R, C ) of   %% Fetch the table element
         0 -> 
-            case lists:any( fun(F) -> F(Sudoku) end, skipfunctors() ) of
+            case lists:any( fun(F) -> F(Puzzle) end, skipfunctors() ) of
                 true  -> {new, 0};
-                false -> {new, pick_number( Sudoku, lists:seq( 1, S*S ))}
+                false -> {new, pick_number( Puzzle, lists:seq( 1, S*S ))}
             end;
         N when N > 0 -> 
             { old, N }
@@ -212,31 +242,32 @@ pick_number( #sudoku{ complexity=S, table=Table, r=R, c=C }=Sudoku ) ->
 
 % Randomly generate a row and eventually all rows, based on pick_number()
 % logic.
-gen_row( #sudoku{ complexity=S, c=C }=Sudoku ) when C > (S*S)->
-    Sudoku;
-gen_row( #sudoku{ table=Table, r=R, c=C, count=Count }=Sudoku ) ->
-    case pick_number( Sudoku ) of
+gen_row( #puzzle{ complexity=S, c=C }=Puzzle ) when C > (S*S)->
+    Puzzle;
+gen_row( #puzzle{ table=Table, r=R, c=C, count=Count }=Puzzle ) ->
+    case pick_number( Puzzle ) of
     { new, 0 } ->
-        gen_row( Sudoku#sudoku{ table=update_table( Table, R, C, 0 ),
+        gen_row( Puzzle#puzzle{ table=update_table( Table, R, C, 0 ),
                                 c=C+1 });
     { new, Element } ->
-        gen_row( Sudoku#sudoku{ table=update_table( Table, R, C, Element ),
+        gen_row( Puzzle#puzzle{ table=update_table( Table, R, C, Element ),
                                 c=C+1, count=Count+1 });
     { old, Element } ->
-        gen_row( Sudoku#sudoku{ table=update_table( Table, R, C, Element ),
+        gen_row( Puzzle#puzzle{ table=update_table( Table, R, C, Element ),
                                 c=C+1 })
     end.
 
-gen_rows( #sudoku{ complexity=S, r=R }=Sudoku ) when R > (S*S) ->
-    Sudoku;
-gen_rows( #sudoku{ r=R }=Sudoku ) ->
-    gen_rows( (gen_row( Sudoku#sudoku{ c=1 } ))#sudoku{ r=R+1 } ).
+gen_rows( #puzzle{ complexity=S, r=R }=Puzzle ) when R > (S*S) ->
+    Puzzle;
+gen_rows( #puzzle{ r=R }=Puzzle ) ->
+    gen_rows( (gen_row( Puzzle#puzzle{ c=1 } ))#puzzle{ r=R+1 } ).
 
-gen_table( Sudoku, 0 ) ->
-    Sudoku;
-gen_table( #sudoku{ complexity=S, rules=Rules }=Sudoku, Times ) ->
-    Sdknew = gen_rows( Sudoku#sudoku{ r=1, c=1 } ),
-    case ( eintable(S, Sdknew#sudoku.table) =:= Rules#rules.elimit ) of
+gen_table( Puzzle, 0 ) ->
+    Puzzle;
+gen_table( #puzzle{ complexity=S, difficulty=D }=Puzzle, Times ) ->
+    Sdknew = gen_rows( Puzzle#puzzle{ r=1, c=1 } ),
+    Elimit = ?DFTY_LIMIT(S, D),
+    case eintable(S, Sdknew#puzzle.table) =:= Elimit of
         true  -> Sdknew;
         false -> gen_table( Sdknew, Times - 1 )
     end.

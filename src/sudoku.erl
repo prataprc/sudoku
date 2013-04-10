@@ -17,10 +17,7 @@
 % `Type` will either be normal | {takeover | Node} | {failover, Node},
 % `Args` defined by the application specification key mod.
 start(_Type, Args) ->
-    case start_apps([]) of
-        ok -> ?MODULE:start_link(Args);
-        {error, Reason} -> {error, Reason}
-    end.
+    ?MODULE:start_link(Args).
 
 prep_stop(State) ->
     State.
@@ -36,32 +33,21 @@ start_link(Args) ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, Args).
 
 init(_) ->
-    {ok, {{one_for_one, 10, 10},
-          [{ sudoku_gen,
-             {sudoku_gen, start_link, [[]]},
-             permanent,
-             5000,
-             worker,
-             [sudoku_gen, sudoku_tbl, sudoku_slv]},
-           { sudoku_slv,
-             {sudoku_slv, start_link, [[]]},
-             permanent,
-             5000,
-             worker,
-             [sudoku_slv, sudoku_tbl]}
-          ]}}.
+    {_, ChildSpec}=Specs = get_childspec(),
+    case supervisor:check_childspecs(ChildSpec) of
+        ok         -> {ok, Specs};
+        {error, _} -> ignore
+    end.
 
 %---- module local functions.
 
-start_apps([]) -> ok;
-start_apps([App | T ]) ->
-    case application:start(App) of
-    ok ->
-        start_apps(T);
-    {error, {already_started, App}} ->
-        start_apps(T);
-    {error, _Reason} ->
-        {error, {app_would_not_start, App}}
+get_childspec() ->
+    {ok, {ReS, ChildSpec}} = application:get_env(childspec),
+    case lists:keyfind(ncurses, 1, application:which_applications()) of
+        false ->
+            {ReS, ChildSpec};
+        _ ->
+            {ok, WinSpec} = application:get_env(childspec_curses),
+            {ReS, ChildSpec ++ WinSpec}
     end.
-
 
