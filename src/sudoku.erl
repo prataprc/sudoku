@@ -17,6 +17,7 @@
 % `Type` will either be normal | {takeover | Node} | {failover, Node},
 % `Args` defined by the application specification key mod.
 start(_Type, Args) ->
+    application:start(ncurses),
     ?MODULE:start_link(Args).
 
 prep_stop(State) ->
@@ -30,7 +31,15 @@ config_change(_Changed, _New, _Removed) -> ok.
 %---- supervisor behaviour callbacks
 
 start_link(Args) ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, Args).
+    supervisor:start_link({local, ?MODULE}, ?MODULE, Args),
+    case lists:member( ncurses, init:get_plain_arguments() ) of
+        true ->
+            sudoku_wm:onview(),
+            sudoku_wst:initialize(),
+            sudoku_wm:play(3);
+        _ -> 
+            ok
+    end.
 
 init(_) ->
     {_, ChildSpec}=Specs = get_childspec(),

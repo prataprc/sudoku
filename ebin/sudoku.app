@@ -2,8 +2,9 @@
     [ {description,  "Sudoku puzzle generator and solver"},
       {vsn,          "0.1.0"},
       {modules,      [sudoku, sudoku_gen, sudoku_slv, sudoku_tbl, sudoku_v,
-                      sudoku_wm, sudoku_wst, sudoku_db, sudoku_curses]},
+                      sudoku_wm, sudoku_wst, sudoku_db]},
       {registered,   [sudoku, sudoku_gen, sudoku_slv, sudoku_wm, sudoku_wst]},
+      {included_applications, [ncurses]},
       {mod,          {sudoku, []}},
       {env,          [ {concurrent, true},
                        {procs, 100},
@@ -39,7 +40,7 @@
                             ]}
                      ]},
                         
-      {applications, [kernel, stdlib, ncurses]}
+      {applications, [kernel, stdlib]}
     ]
 }.
 

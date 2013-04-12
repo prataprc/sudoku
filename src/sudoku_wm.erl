@@ -3,7 +3,8 @@
 -behaviour(gen_server).
 
 % module APIs
--export([start_link/1, play/1, verify/1, event/2, initialize/0]).
+-export([start_link/1, play/1, verify/1, event/2, load/0, blur/0]).
+-export([onload/1, onblur/1]).
 
 % behaviour callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -23,8 +24,11 @@ play(Complexity) ->
 verify(Complexity) ->
     gen_server:call(?MODULE, {verify, Complexity}, infinity).
 
-initialize() ->
-    gen_server:call(?MODULE, initialize, infinity).
+load() ->
+    gen_server:call(?MODULE, load, infinity).
+
+blur() ->
+    gen_server:call(?MODULE, blur, infinity).
 
 event(inpch, Char) ->
     gen_server:cast(?MODULE, {inpch, Char}).
@@ -34,6 +38,7 @@ event(inpch, Char) ->
 init(_Args) ->
     {ok, #wm{}}.
 
+
 handle_call({play, S}, _From, State) ->
     NewState = State#wm{view=play, s=S},
     {reply, render(play, NewState), NewState};
@@ -41,32 +46,46 @@ handle_call({play, S}, _From, State) ->
 handle_call({verify, S}, _From, State) ->
     {reply, S, State};
 
-handle_call(initialize, _From, State) ->
-    {Yn, Xn} = ncdrv:getmaxyx(),
-    {Y, X, Ys, Xs} = {0, 0, Yn-1, Xn},
-    Win = ncdrv:newwin(Ys, Xs, Y, X),
-    NewState = State#wm{win=Win, y=Y, x=X, rows=Ys, cols=Xs},
+handle_call(load, _From, State) ->
+    {reply, ok, ?MODULE:onload(State)};
 
-    ncdrv:raw(),
-    ncdrv:noecho(),
-    ncdrv:init_pairs(),
+handle_call(blur, _From, State) ->
+    {reply, ok, ?MODULE:onblur(State)}.
 
-    ncdrv:win(?WIN_MAIN),
-    ncdrv:wdom(domtree()),
-
-    {reply, ok, NewState}.
 
 handle_cast( {inpch, _Char}, State )->
     {noreply, State}.
 
+
 handle_info( _Info, State )->
     {noreply, State}.
+
 
 terminate( _Reason, State )->
     {ok, State}.
 
+
 code_change( _OldVsn, State, _Extra )->
     {ok, State}.
+
+
+%---- Handle events.
+
+onload(State) ->
+    ncdrv:app(sudoku),
+    ncdrv:win(?WIN_MAIN),
+    ncdrv:wdom(domtree()),
+    {Yn, Xn} = ncdrv:getmaxyx(),
+    {Y, X, Ys, Xs} = {0, 0, Yn-1, Xn},
+    Win = ncdrv:newwin(Ys, Xs, Y, X),
+    State#wm{win=Win}.
+
+onblur(#wm{win=Win}=State) ->
+    ncdrv:delwin(Win),
+    ncdrv:wdom({empty, []}),
+    ncdrv:win(undefined),
+    ncdrv:app(undefined),
+    State#wm{win=undefined}.
 
 
 %-- Render sudoku puzzle in play mode.
@@ -122,12 +141,8 @@ frame(subrow, {S, Str, Ch})->
     Rc = [?VLINE] ++ lists:flatten( lists:duplicate( S-1, Str )) ++ [Ch],
     Rc.
 
-%---- Handle events.
 
 %---- local functions.
 
 domtree() ->
-    {root, [{?WIN_MAIN, []},
-            {?WIN_STATUS, []}
-           ]}.
-
+    {?WIN_MAIN, [{?WIN_STATUS, []}]}.

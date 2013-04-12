@@ -3,7 +3,9 @@
 -behaviour(gen_server).
 
 % module APIs
--export([start_link/1, initialize/0]).
+-export([start_link/1, load/0, blur/0]).
+
+-export([onload/1, onblur/1]).
 
 % behaviour callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -17,20 +19,23 @@
 start_link(Args) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, Args, []).
 
-initialize() ->
-    gen_server:call(?MODULE, initialize, infinity).
+load() ->
+    gen_server:call(?MODULE, load, infinity).
+
+blur() ->
+    gen_server:call(?MODULE, blur, infinity).
 
 %---- gen_server callbacks
 
 init(_Args) ->
     {ok, #wst{}}.
 
-handle_call(initialize, _From, State) ->
-    {Yn, Xn} = ncdrv:getmaxyx(),
-    {Y, X, Ys, Xs} = {Yn-1, 0, 1, Xn},
-    Win = ncdrv:newwin(Ys, Xs, Y, X),
-    NewState = State#wst{win=Win, y=Y, x=X, rows=Ys, cols=Xs},
-    {reply, ok, NewState};
+
+handle_call(load, _From, State) ->
+    {reply, ok, ?MODULE:onload(State)};
+
+handle_call(blur, _From, State) ->
+    {reply, ok, ?MODULE:onblur(State)};
 
 handle_call({S}, _From, State) ->
     {reply, S, State}.
@@ -50,5 +55,18 @@ terminate( _Reason, State )->
 
 code_change( _OldVsn, State, _Extra )->
     {ok, State}.
+
+
+%---- Handle events.
+
+onload(State) ->
+    {Yn, Xn} = ncdrv:getmaxyx(),
+    {Y, X, Ys, Xs} = {Yn-1, 0, 1, Xn},
+    Win = ncdrv:newwin(Ys, Xs, Y, X),
+    State#wst{win=Win, y=Y, x=X, rows=Ys, cols=Xs}.
+
+onblur(#wm{win=Win}=State) ->
+    ncdrv:delwin(Win),
+    State#wm{win=undefined}.
 
 
