@@ -1,2 +1,7 @@
 <box id="root">
+    <box id="title" y="1" x="1" rows="1">
+        Play sudoku
+    </box>
+    <box id="sample" y="4" x="5" rows="10" cols="10">
+    </box>
 </box>
