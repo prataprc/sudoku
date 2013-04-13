@@ -32,13 +32,13 @@ config_change(_Changed, _New, _Removed) -> ok.
 
 start_link(Args) ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, Args),
-    case lists:member( ncurses, init:get_plain_arguments() ) of
+    case lists:member(ncurses, init:get_plain_arguments()) of
         true ->
-            sudoku_wm:onview(),
-            sudoku_wst:initialize(),
-            sudoku_wm:play(3);
-        _ -> 
-            ok
+            XmlFile = filename:join([code:priv_dir(sudoku), "3play.xml"]),
+            Node = ncdom:boxify(ncdrv:box(), ncdom:pagefile(XmlFile)),
+            {ok, RootPid} = ncnode:start(none, Node),
+            ncdrv:register_app({sudoku, XmlFile, RootPid});
+        _ -> ok
     end.
 
 init(_) ->
@@ -52,11 +52,5 @@ init(_) ->
 
 get_childspec() ->
     {ok, {ReS, ChildSpec}} = application:get_env(childspec),
-    case lists:keyfind(ncurses, 1, application:which_applications()) of
-        false ->
-            {ReS, ChildSpec};
-        _ ->
-            {ok, WinSpec} = application:get_env(childspec_curses),
-            {ReS, ChildSpec ++ WinSpec}
-    end.
+    {ReS, ChildSpec}.
 

@@ -11,9 +11,6 @@
 -define(VLINE,    (?ACS_VLINE bor ?COLOR_PAIR(?COLOR_YB))).
 -define(PLUS,     (?ACS_PLUS bor ?COLOR_PAIR(?COLOR_YB))).
 
--define(WIN_MAIN, sudoku_wm).
--define(WIN_STATUS, sudoku_wst).
-
 -define(DFTY_LIMIT(S, Difflty), erlang:trunc(S*S*S*S * (Difflty/100))).
 
 % Describe how to generate a sudoku puzzle.
