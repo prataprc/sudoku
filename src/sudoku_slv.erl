@@ -79,20 +79,19 @@ handle_call( {psolve, Tables}, _From, State ) ->
     { reply, Results, State }.
 
 handle_cast( Request, State )->
-    io:format("cast ~w ~w~n", [Request, State]),
+    error_logger:info_msg("sudoku_slv cast call : ~w ~w~n", [Request, State]),
     {noreply, State}.
 
-handle_info( _Info, State )->
-    %%io:format("info ~w ~w~n", [Info, State]),
+handle_info( Info, State )->
+    error_logger:info_msg("sudoku_slv info : ~w ~w~n", [Info, State]),
     {noreply, State}.
 
 terminate( Reason, State )->
-    io:format("terminate ~w ~w~n", [Reason, State]),
-    ets:delete(test),
-    {ok, State}.
+    error_logger:info_msg("sudoku_slv terminating : ~w ~w~n", [Reason, State]),
+    ets:delete(test).
 
 code_change( OldVsn, State, _Extra )->
-    io:format("codechange ~w ~w~n", [OldVsn, State]),
+    error_logger:info_msg("sudoku_slv code-change : ~w ~w~n", [OldVsn, State]),
     {ok, State}.
 
 %---- module local functions

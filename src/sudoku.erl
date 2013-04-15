@@ -3,6 +3,9 @@
 -behaviour(application).
 -behaviour(supervisor).
 
+% module APIs
+-export([ ncstart/0 ]).
+
 % application behaviour callbacks
 -export([ start/2, prep_stop/1, stop/1, config_change/3 ]).
 
@@ -17,7 +20,6 @@
 % `Type` will either be normal | {takeover | Node} | {failover, Node},
 % `Args` defined by the application specification key mod.
 start(_Type, Args) ->
-    application:start(ncurses),
     ?MODULE:start_link(Args).
 
 prep_stop(State) ->
@@ -31,15 +33,7 @@ config_change(_Changed, _New, _Removed) -> ok.
 %---- supervisor behaviour callbacks
 
 start_link(Args) ->
-    supervisor:start_link({local, ?MODULE}, ?MODULE, Args),
-    case lists:member(ncurses, init:get_plain_arguments()) of
-        true ->
-            XmlFile = filename:join([code:priv_dir(sudoku), "3play.xml"]),
-            Node = ncdom:boxify(ncdrv:box(), ncdom:pagefile(XmlFile)),
-            {ok, RootPid} = ncnode:start(none, Node),
-            ncdrv:register_app({sudoku, XmlFile, RootPid});
-        _ -> ok
-    end.
+    supervisor:start_link({local, ?MODULE}, ?MODULE, Args).
 
 init(_) ->
     {_, ChildSpec}=Specs = get_childspec(),
@@ -47,6 +41,19 @@ init(_) ->
         ok         -> {ok, Specs};
         {error, _} -> ignore
     end.
+
+%---- module APIs.
+
+ncstart() ->
+    application:start(ncurses),
+    application:start(sudoku),
+    XmlFile = filename:join([code:priv_dir(sudoku), "3play.xml"]),
+    {Y, X, Rows, Cols}=W = ncdrv:mainbox(),
+    RootNode = ncdom:boxify(W, ncdom:pagefile(sudoku, XmlFile)),
+    ncbuf:cursor_frames(Y, X, Rows, Cols, RootNode),
+    ncnode:start({none, RootNode}),
+    ncdrv:register_app({sudoku, RootNode}).
+
 
 %---- module local functions.
 

@@ -111,22 +111,22 @@ handle_call(puzzledb, _From, State) ->
 
 
 handle_cast(Request, State) ->
-    io:format("cast ~w ~w~n", [Request, State]),
+    error_logger:info_msg("sudoku_gen cast call : ~w ~w~n", [Request, State]),
     {noreply, State}.
 
 
-handle_info( _Info, State )->
-    %%io:format("info ~w ~w~n", [Info, State]),
+handle_info( Info, State )->
+    error_logger:info_msg("sudoku_gen info : ~w ~w~n", [Info, State]),
     {noreply, State}.
 
 
 terminate( Reason, State )->
-    io:format("terminate ~w ~w~n", [Reason, State]),
+    error_logger:info_msg("sudoku_gen terminating : ~w ~w~n", [Reason, State]),
     {noreply, State}.
 
 
 code_change( OldVsn, State, _Extra )->
-    io:format("codechange ~w ~w~n", [OldVsn, State]),
+    error_logger:info_msg("sudoku_gen code-change : ~w ~w~n", [OldVsn, State]),
     {noreply, State}.
 
 
