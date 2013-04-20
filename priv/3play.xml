@@ -5,7 +5,7 @@
     <box id="matrix" margin="auto auto auto auto"
          rows="25" cols="25" border="1 solid yellow">
         <box id="smat1" margin="-1 0 0 -1" rows="9" cols="9"
-             border="1 solid yellow"></box>
+             border="1 solid yellow" focus="default"></box>
         <box id="smat2" margin="-1 0 0 7" rows="9" cols="9"
              border="1 solid yellow"></box>
         <box id="smat3" margin="-1 0 0 15" rows="9" cols="9"

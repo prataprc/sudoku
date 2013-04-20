@@ -48,11 +48,12 @@ ncstart() ->
     application:start(ncurses),
     application:start(sudoku),
     XmlFile = filename:join([code:priv_dir(sudoku), "3play.xml"]),
-    {Y, X, Rows, Cols}=W = ncdrv:mainbox(),
+    {_Y, _X, Rows, Cols}=W = ncdrv:mainbox(),
     RootNode = ncdom:boxify(W, ncdom:pagefile(sudoku, XmlFile)),
-    ncbuf:cursor_frames(Y, X, Rows, Cols, RootNode),
-    ncnode:start({none, RootNode}),
-    ncdrv:register_app({sudoku, RootNode}).
+    ncbuf:render_page(Rows, Cols, RootNode),
+    ncnode:start_link({none, RootNode}).
+    %ncdrv:register_app(#app{name=sudoku}),
+    %ncdrv:current_app(sudoku).
 
 
 %---- module local functions.
