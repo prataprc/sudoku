@@ -47,13 +47,22 @@ init(_) ->
 ncstart() ->
     application:start(ncurses),
     application:start(sudoku),
+    Result = 
+        try index() 
+        catch
+                throw:Term -> Term;
+                exit:Reason -> {'EXIT',Reason};
+                error:Reason -> {'EXIT',{Reason,erlang:get_stacktrace()}}
+        end,
+    %error_logger:info_msg("Result .... ~p~n", [Result]),
+    Result.
+
+index() ->
     XmlFile = filename:join([code:priv_dir(sudoku), "3play.xml"]),
-    {_Y, _X, Rows, Cols}=W = ncdrv:mainbox(),
-    RootNode = ncdom:boxify(W, ncdom:pagefile(sudoku, XmlFile)),
-    ncbuf:render_page(Rows, Cols, RootNode),
-    ncnode:start_link({none, RootNode}).
-    %ncdrv:register_app(#app{name=sudoku}),
-    %ncdrv:current_app(sudoku).
+    XPort = ncdrv:mainbox(),
+    DocPath = ncpath:docpath(node(), sudoku, XmlFile),
+    Doc = ncdom:xdoc(XPort, DocPath, XmlFile),
+    ncdrv:loaddoc(Doc).
 
 
 %---- module local functions.
