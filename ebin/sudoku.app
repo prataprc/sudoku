@@ -4,7 +4,6 @@
       {modules,      [sudoku, sudoku_gen, sudoku_slv, sudoku_tbl, sudoku_v,
                       sudoku_db]},
       {registered,   [sudoku, sudoku_gen, sudoku_slv]},
-      {included_applications, [ncurses]},
       {mod,          {sudoku, []}},
       {env,          [ {concurrent, true},
                        {procs, 100},
