@@ -121,7 +121,7 @@ handle_info( Info, State )->
 
 
 terminate( Reason, State )->
-    error_logger:info_msg("sudoku_gen terminating : ~w ~w~n", [Reason, State]),
+    error_logger:info_msg("sudoku_gen terminating : ~w~n", [Reason]),
     {noreply, State}.
 
 

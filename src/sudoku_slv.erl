@@ -34,7 +34,7 @@
          code_change/3]).
 
 -export([rr_byrow/2, rr_bycol/2, rr_bystb/2, rr_uniqinrow/2, rr_uniqincol/2,
-         rr_uniqinstb/2, entry/6, spawnrun/3 ]).
+         rr_uniqinstb/2, entry/4, solve_/2, psolve_/2, psolve_solve_/3 ]).
 
 -include("sudoku.hrl").
 
@@ -53,42 +53,40 @@ psolve(Tables) ->
 
 init( _Args ) ->
     process_flag(trap_exit, true),
-    ets:new(test, [set, named_table]),
-    ets:insert(test, {busy, false}),
-    {ok, {}}.
+    {ok, []}.
 
-handle_call( {solve, S, Table}, _From, State ) ->
-    ets:update_element(test, busy, {2, true}),
-    Res = solve_( S, Table ),
-    ets:update_element(test, busy, {2, false}),
-    case Res of
-        {passed, _} -> {reply, Res, State};
-        {failed, _} -> {noreply, State}
-    end;
+handle_call( {solve, S, Table}, From, State ) ->
+    Pid = spawn_link( ?MODULE, solve_, [S, Table] ),
+    {noreply, [{Pid, From} | State]};
 
-handle_call( {psolve, Tables}, _From, State ) ->
-    ets:update_element(test, busy, {2, true}),
-    Results = psolve_( Tables, 0),
-    ets:update_element(test, busy, {2, false}),
-    Results = lists:filter( fun(Res) -> case Res of
-                                        { passed, _ } -> true;
-                                        { failed, _ } -> false
-                                        end
-                            end,
-                            Results ),
-    { reply, Results, State }.
+handle_call( {psolve, Tables}, From, State ) ->
+    Pid = spawn_link( ?MODULE, psolve_, [Tables, 0] ),
+    {noreply, [{Pid, From} | State]}.
+
 
 handle_cast( Request, State )->
     error_logger:info_msg("sudoku_slv cast call : ~w ~w~n", [Request, State]),
     {noreply, State}.
 
-handle_info( Info, State )->
-    error_logger:info_msg("sudoku_slv info : ~w ~w~n", [Info, State]),
-    {noreply, State}.
+
+handle_info( {'EXIT', Pid, {passed, _}=Res}, State )->
+    From = proplists:get_value(Pid, State),
+    gen_server:reply(From, Res),
+    {noreply, proplists:delete(Pid, State)};
+
+handle_info( {'EXIT', Pid, {invalid, _}=Res}, State )->
+    From = proplists:get_value(Pid, State),
+    gen_server:reply(From, Res),
+    {noreply, proplists:delete(Pid, State)};
+
+handle_info( {'EXIT', Pid, {psolve, Results}}, State )->
+    From = proplists:get_value(Pid, State),
+    gen_server:reply(From, Results),
+    {noreply, proplists:delete(Pid, State)}.
 
 terminate( Reason, State )->
-    error_logger:info_msg("sudoku_slv terminating : ~w ~w~n", [Reason, State]),
-    ets:delete(test).
+    error_logger:info_msg("sudoku_slv terminating : ~w~n", [Reason]),
+    {noreply, State}.
 
 code_change( OldVsn, State, _Extra )->
     error_logger:info_msg("sudoku_slv code-change : ~w ~w~n", [OldVsn, State]),
@@ -271,17 +269,42 @@ reduce( S, Table, [Fun|T] ) -> reduce( S, Fun( S, Table ), T ).
 
 % The back-track algorithm to solve the sudoku puzzle. A double recursive
 % algorithm that takes more effort to learn, take your time !!
-backtrack( elist, _, Table, _, _, [] ) -> { failed, Table };
-backtrack( elist, S, Table, R, C, [E|T] ) ->
-    Tnew = update_table( Table, R, C, E ),
-    case backtrack( reduce, S, Tnew, R, C+1 ) of
-        { failed, _Tb_new } ->
-            backtrack( elist, S, Table, R, C, T );
-        { passed, Tb_new } ->
-            { passed, Tb_new }
+backtrack( elist, _, Table, _, _, [] ) -> {invalid, Table};
+backtrack( elist, S, Table, R, C, [E|T]=Options ) ->
+    case is_concurrent() of
+        true ->
+            spanout(S, Table, R, C, Options, 0); %% Concurrent backtracking
+        false -> 
+            Tnew = update_table( Table, R, C, E ),
+            case backtrack(reduce, S, Tnew, R, C) of
+                {invalid, _} -> backtrack(elist, S, Table, R, C, T);
+                Res -> Res
+            end
     end;
 backtrack( elist, S, Table, R, C, E ) when is_integer(E) ->
     backtrack( elist, S, Table, R, C, [E] ).
+
+backtrack( reduce, S, Table, R, C ) ->
+    Tnew = reduce( S, Table, reducerules() ),
+    case sudoku_v:fixtime( S, Tnew ) of
+    true  ->    %% Vow, we achieved it, return back the SUDOKU TABLE !!
+        {passed, Tnew};
+    false ->    %% Check whether the partially formed table is proper
+        case sudoku_v:genvalid( S, Tnew ) of
+        true ->     %% Looks like, so proceed with backtracking
+            movenext(S, Tnew, R, C+1);
+        false ->
+            {invalid, Table}
+        end
+    end.
+
+% Exec may not match this clause ??
+movenext(S, Table, R, _) when R > (S*S) -> {finfail, Table};
+movenext(S, Table, R, C) when C > (S*S) -> movenext(S, Table, R+1, 1);
+movenext(S, Table, R, C) ->
+    Options = tblelement(Table, R, C),
+    backtrack(elist, S, Table, R, C, Options).
+
 
 % ------ Concurrent logic
 is_concurrent() ->
@@ -290,76 +313,44 @@ is_concurrent() ->
         andalso
         length(processes()) < Procs.
 
-spanout( S, Table, R, C, [], Pids ) -> spanrecv( S, Table, R, C, Pids );
-spanout( S, Table, R, C, [E | T], Pids ) ->
-    case ets:lookup(test, busy) of
-        [{busy, true}] ->
-            Pid = spawn( ?MODULE, entry, [self(), S, Table, R, C, E] ),
-            spanout( S, Table, R, C, T, [Pid | Pids] );
-        [{busy, false}] ->
-            {failed, Table}
-    end;
-spanout( S, Table, R, C, E, Pids ) when is_integer(E) ->
-    spanout( S, Table, R, C, [E], Pids ).
+spanout( _, _, _, _, [], Count ) -> {concur, Count};
+spanout( S, Table, R, C, [E | T], Count ) ->
+    Tnew = update_table( Table, R, C, E ),
+    spawn_link( ?MODULE, entry, [S, Tnew, R, C] ),
+    spanout( S, Table, R, C, T, Count+1 ).
 
-spanrecv( _S, Table, _R, _C, [] ) -> {failed, Table};
-spanrecv( S, Table, R, C, [Pid| Pids] ) ->
-    erlang:process_flag(priority, high),
+spanrcv( 0 ) -> {invalid, none};
+spanrcv( Count ) ->
     receive
-    {failed, _Tb_new} ->
-        spanrecv( S, Table, R, C, Pids );
-    {passed, Tb_new} ->
-        killspans([ Pid | Pids ]),
-        {passed, Tb_new}
+        {'EXIT', _, {passed, _}=Res} -> exit(Res);
+        {'EXIT', _, _} -> spanrcv(Count -1)   % Fence all other failures.
     end.
 
-killspans( [] ) -> ok;
-killspans( [Pid | Pids] ) ->
-    exit( Pid, kill ),
-    killspans( Pids ).
-
-entry( Frompid, S, Table, R, C, E ) ->
-    erlang:process_flag(priority, low),
-    Res = backtrack( elist, S, Table, R, C, [E | []] ),
-    Frompid ! Res.
+entry(S, Table, R, C) ->
+    process_flag(trap_exit, true),
+    case backtrack(reduce, S, Table, R, C) of
+        {concur, Count} -> exit(spanrcv(Count));
+        Res -> exit(Res)
+    end.
 
 %% --------- Concurrent logic
 
-
-backtrack( _, S, Table, R, _ ) when R > (S*S) -> { failed, Table };
-backtrack( Atom, S, Table, R, C ) when C > (S*S) ->
-    backtrack( Atom, S, Table, R+1, 1 );
-backtrack( reduce, S, Table, R, C ) ->
-    Tnew = reduce( S, Table, reducerules() ),
-    case sudoku_v:fixtime( S, Tnew ) of
-    true  ->    %% Vow, we achieved it, return back the SUDOKU TABLE !!
-        { passed, Tnew };
-    false ->    %% Check whether the partially formed table is proper
-        case sudoku_v:genvalid( S, Tnew ) of
-        true ->     %% Looks like, so proceed with backtracking
-            case is_concurrent() of
-                true ->     %% Concurrent backtracking
-                    spanout( S, Tnew, R, C, tblelement( Tnew, R, C ), [] );
-                false ->    %% Sequential backtracking
-                    backtrack( elist, S, Tnew, R, C, tblelement( Tnew, R, C ))
-            end;
-        false ->
-            { failed, Table }
-        end
+solve_(S, Table) ->
+    process_flag(trap_exit, true),
+    case backtrack(reduce, S, init_reduce(S, Table), 1, 0) of
+        {concur, Count} -> spanrcv(Count);
+        Res -> exit(Res)
     end.
 
-solve_( S, Table ) ->
-    backtrack( reduce, S, init_reduce(S, Table), 1, 1 ).
 
-psolve_(rcv, Count, Count, Results) -> Results;
-psolve_(rcv, Count, N, Results) ->              %% Collect the results
-    receive {solved, Res} -> psolve_( rcv, Count, N+1, [Res|Results] ) end.
-psolve_([], N) ->
-    psolve_(rcv, N, 0, [] );
+psolve_([], N) -> psolve_(N, 0, []);
 psolve_( [{S, Table} | Tables], N ) ->
-    %% Spawn a process for a puzzle
-    spawn( ?MODULE, spawnrun, [self(), S, Table] ),
+    spawn_link( ?MODULE, psolve_solve_, [self(), S, Table] ),
     psolve_(Tables, N+1).
 
-spawnrun(Frompid, S, Table) ->
-    Frompid ! {solved, solve_(S, Table)}.   %% Send back the result
+psolve_solve_(Pid, S, Table) -> Pid ! ?MODULE:solve(S, Table).
+
+psolve_(Count, Count, Acc) -> exit({psolve, Acc});
+psolve_(Count, N, Acc) ->
+    receive Res -> psolve_(Count, N+1, [Res|Acc]) end.
+

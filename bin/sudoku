@@ -3,61 +3,156 @@
 
 -include_lib("sudoku/include/sudoku.hrl").
 
-main([Args]) ->
+getopts([], Acc) -> lists:reverse(Acc);
+getopts(["-c", Complexity | Args], Acc) ->
+    getopts(Args, [{complexity, list_to_integer(Complexity)} | Acc]);
+getopts(["-t" | Args], Acc) ->
+    getopts(Args, [{concurrent, true} | Acc]);
+getopts(["-n", N | Args], Acc) ->
+    getopts(Args, [{count, list_to_integer(N)} | Acc]);
+getopts(["-d", D | Args], Acc) ->
+    getopts(Args, [{difficulty, list_to_integer(D)} | Acc]);
+getopts(["-s", S | Args], Acc) ->
+    getopts(Args, [{seed, list_to_integer(S)} | Acc]);
+getopts(["-benchmark" | Args], Acc) ->
+    getopts(Args, [{benchmark, true} | Acc]);
+getopts(["-genbad" | Args], Acc) ->
+    getopts(Args, [{genbad, true} | Acc]);
+getopts([BadArg | _], _) ->
+    io:format("Bad argument ~p~n", [BadArg]),
+    erlang:halt().
+
+main(Args) ->
+    Opts = getopts(Args, []),
     application:start(sudoku),
-    solve(Args),
+    case proplists:is_defined(concurrent, Opts) of
+        true -> application:set_env(sudoku, concurrent, true);
+        _ -> ok
+    end,
+    Complx = proplists:get_value(complexity, Opts, 3),
+    N = proplists:get_value(count, Opts, 1),
+    D = proplists:get_value(difficulty, Opts, 60),
+    Seed = proplists:get_value(seed, Opts, element(3,now()) ),
+    Benchmark = proplists:get_value(benchmark,Opts,false),
+    Genpath = proplists:get_value(genbad,Opts,false),
+    if 
+        Benchmark == true ->
+            io:format("complexity:~p count:~p difficulty:~p seed:~p~n",
+                      [Complx, N, D, Seed]),
+            io:format("puzzle-count   sequential   parallel~n"),
+            benchmark(Complx, N, D, Seed);
+        Genpath == true ->
+            genpathological(Complx, D);
+        true ->
+            io:format("complexity:~p count:~p difficulty:~p seed:~p~n",
+                      [Complx, N, D, Seed]),
+            Time = run(Complx, N, D, Seed),
+            io:format("Time taken to evaluate ~puS~n", [Time])
+    end,
     application:stop(sudoku),
-    erlang:halt();
+    erlang:halt().
 
-main(_) ->
-    usage().
 
-usage() ->
-    io:format("usage: sudoku\n"),
-    erlang:halt(1).
+solve([], Acc) -> lists:sum(Acc);
+solve([{Complx, Table} | Tables], Acc) ->
+    {Time, {passed, _OkTbl}} = timer:tc( sudoku_slv, solve, [Complx, Table] ),
+    solve(Tables, [Time | Acc]).
 
-solve("2") -> 
-    io:format("~p~n", [sudoku_slv:solve( 2, d2_table() )] );
-solve("3") -> 
-    io:format("~p~n", [sudoku_slv:solve( 3, d3_table() )] );
-solve("4") -> 
-    io:format("~p~n", [sudoku_slv:solve( 4, d4_table() )] ).
 
-d2_table() ->
-    { { 0, 0, 0, 1 },
-      { 0, 0, 0, 0 },
-      { 0, 0, 0, 0 },
-      { 0, 0, 0, 0 }
-    }.
+psolve(Tables) ->
+    {Time, _} = timer:tc( sudoku_slv, psolve, [Tables] ),
+    Time.
 
-d3_table() ->
-    { { 0, 2, 0, 0, 6, 0, 4, 0, 3 },
-      { 4, 0, 0, 3, 0, 8, 0, 0, 6 },
-      { 0, 0, 3, 0, 5, 0, 0, 1, 7 },
-      { 0, 8, 0, 1, 0, 0, 5, 0, 2 },
-      { 3, 0, 0, 0, 2, 0, 0, 0, 8 },
-      { 6, 0, 2, 0, 0, 5, 0, 7, 0 },
-      { 1, 7, 0, 0, 3, 0, 8, 0, 0 },
-      { 2, 0, 0, 4, 0, 7, 0, 0, 5 },
-      { 9, 0, 6, 0, 8, 0, 0, 3, 0 }
-    }.
 
-d4_table() ->
-    { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
-    }.
+run(Complx, N, D, Seed) ->
+    Tables = [ {Complx, sudoku_gen:generate(switching, Seed+X, Complx, D)} ||
+               X <- lists:seq(1,N) ],
+    solve(Tables, []).
+
+
+benchmark(0, _) -> ok;
+benchmark(N, Tables) ->
+    {ok, Procs} = application:get_env(sudoku, procs),
+    application:set_env(sudoku, procs, Procs+N),
+    {Tbls, _} = lists:split(N, Tables),
+    Time1 = solve(Tbls, []),
+    Time2 = psolve(Tbls),
+    io:format("~p    ~p    ~p~n", [N, Time1, Time2]),
+    benchmark(N-1, Tables).
+
+benchmark(Complx, N, D, Seed) ->
+    Tables = tables(Complx, N, D, Seed),
+    benchmark(N, Tables).
+
+tables(Complx, N, D, Seed) when N > 94 ->
+    Tables = [ {Complx, sudoku_gen:generate(switching, Seed+X, Complx, D)} ||
+               X <- lists:seq(1,N-1) ],
+    {T1, T2} = lists:split(94, Tables),
+    T1 ++ [{3,patholo3()}] ++ T2;
+
+tables(Complx, N, D, Seed) ->
+    [ {Complx, sudoku_gen:generate(switching, Seed+X, Complx, D)} ||
+      X <- lists:seq(1,N) ].
+
+
+genpathological(Complx, D) ->
+    {_,_,Seed} = now(),
+    Table = sudoku_gen:generate(switching, Seed, Complx, D),
+    io:format("~p~n", [Table]),
+    case timer:tc( sudoku_slv, solve, [Complx, Table] ) of
+        {Time, _} when Time < 10000000-> genpathological(Complx, D);
+        _ -> io:format("~nPathological combination ~n~p~n", [Table])
+    end.
+
+
+patholo3() ->
+    {{0,0,2,0,0,4,0,0,9},
+     {0,0,0,0,0,9,0,0,0},
+     {0,6,0,0,0,0,0,4,8},
+     {0,3,5,0,0,0,0,0,0},
+     {0,0,6,0,0,0,1,0,0},
+     {0,9,0,0,0,5,0,0,4},
+     {4,0,0,0,5,0,0,0,0},
+     {6,0,0,0,0,2,0,0,0},
+     {9,0,0,0,4,6,0,0,0}}.
+
+
+
+%d2_table() ->
+%    { { 0, 0, 0, 1 },
+%      { 0, 0, 0, 0 },
+%      { 0, 0, 0, 0 },
+%      { 0, 0, 0, 0 }
+%    }.
+%
+%d3_table() ->
+%    { { 0, 0, 0, 0, 6, 0, 4, 0, 3 },
+%      { 4, 0, 0, 3, 0, 8, 0, 0, 6 },
+%      { 0, 0, 0, 0, 5, 0, 0, 1, 7 },
+%      { 0, 8, 0, 1, 0, 0, 5, 0, 2 },
+%      { 3, 0, 0, 0, 2, 0, 0, 0, 8 },
+%      { 6, 0, 2, 0, 0, 5, 0, 7, 0 },
+%      { 1, 7, 0, 0, 3, 0, 8, 0, 0 },
+%      { 2, 0, 0, 0, 0, 0, 0, 0, 5 },
+%      { 9, 0, 6, 0, 8, 0, 0, 3, 0 }
+%    }.
+%
+%d4_table() ->
+%    { { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+%      { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+%    }.
 % vim: filetype=erlang :

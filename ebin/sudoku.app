@@ -5,7 +5,7 @@
                       sudoku_db]},
       {registered,   [sudoku, sudoku_gen, sudoku_slv]},
       {mod,          {sudoku, []}},
-      {env,          [ {concurrent, true},
+      {env,          [ {concurrent, false},
                        {procs, 100},
                        {dbroot, '.textmode/sudoku'},
                        {childspec,
