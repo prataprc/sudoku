@@ -1,4 +1,5 @@
+pushcode: push-github
+
 push-github:
-	# git remote add origin git@github.com:prataprc/sudoku.git
-	git push -u origin master
+	git push git@github.com:prataprc/sudoku.git
 
