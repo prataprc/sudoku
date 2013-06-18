@@ -1,6 +1,6 @@
 Solve sudoku puzzle using a backtracking algorithm written in erlang, it also
 includes a concurrent variant and API to solve many puzzles simultaneously.
-This `write-up <http://prataprc.github.io/sudoku-pathological.html`_ explains
+This `write-up <http://prataprc.github.io/sudoku-pathological.html>`_ explains
 the algorithm is better detail. The primary motive of writing this program is
 to analyze performance of erlang-VM and its concurrent-paradigm. There is a
 command line script to play with the puzzle solver. First clone this
