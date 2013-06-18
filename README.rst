@@ -4,7 +4,8 @@ This `write-up <http://prataprc.github.io/sudoku-pathological.html>`_ explains
 the algorithm is better detail. The primary motive of writing this program is
 to analyze performance of erlang-VM and its concurrent-paradigm. There is a
 command line script to play with the puzzle solver. First clone this
-repository and change to its root-directory.
+repository, add repository root to your **ERL_LIB** and change to its
+root-directory to execute the script command.
 
 To randomly generate a 3x3 sudoku puzzle and solve the same.
 
