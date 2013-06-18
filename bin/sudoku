@@ -1,23 +1,28 @@
 #!/usr/bin/env escript
 %% -*- erlang -*-
+%%! +S 2:2
 
 -include_lib("sudoku/include/sudoku.hrl").
 
 getopts([], Acc) -> lists:reverse(Acc);
+
+getopts(["-f", File | Args], Acc) ->    % Solve puzzle from file
+    getopts(Args, [{puzzlefile, File} | Acc]);
+getopts(["-genbad" | Args], Acc) ->     % Generate pathological puzzle
+    getopts(Args, [{genbad, true} | Acc]);
+
+getopts(["-benchmark" | Args], Acc) ->  % Run benchmark test 
+    getopts(Args, [{benchmark, true} | Acc]);
 getopts(["-c", Complexity | Args], Acc) ->
     getopts(Args, [{complexity, list_to_integer(Complexity)} | Acc]);
-getopts(["-t" | Args], Acc) ->
-    getopts(Args, [{concurrent, true} | Acc]);
-getopts(["-n", N | Args], Acc) ->
-    getopts(Args, [{count, list_to_integer(N)} | Acc]);
 getopts(["-d", D | Args], Acc) ->
     getopts(Args, [{difficulty, list_to_integer(D)} | Acc]);
+getopts(["-n", N | Args], Acc) ->
+    getopts(Args, [{count, list_to_integer(N)} | Acc]);
+getopts(["-t" | Args], Acc) ->
+    getopts(Args, [{concurrent, true} | Acc]);
 getopts(["-s", S | Args], Acc) ->
     getopts(Args, [{seed, list_to_integer(S)} | Acc]);
-getopts(["-benchmark" | Args], Acc) ->
-    getopts(Args, [{benchmark, true} | Acc]);
-getopts(["-genbad" | Args], Acc) ->
-    getopts(Args, [{genbad, true} | Acc]);
 getopts([BadArg | _], _) ->
     io:format("Bad argument ~p~n", [BadArg]),
     erlang:halt().
@@ -34,89 +39,72 @@ main(Args) ->
     D = proplists:get_value(difficulty, Opts, 60),
     Seed = proplists:get_value(seed, Opts, element(3,now()) ),
     Benchmark = proplists:get_value(benchmark,Opts,false),
+    PuzzleFile = proplists:get_value(puzzlefile,Opts,false),
     Genpath = proplists:get_value(genbad,Opts,false),
     if 
         Benchmark == true ->
             io:format("complexity:~p count:~p difficulty:~p seed:~p~n",
                       [Complx, N, D, Seed]),
-            io:format("puzzle-count   sequential   parallel~n"),
-            benchmark(Complx, N, D, Seed);
+            Acc = benchmark(Complx, N, D, Seed),
+            Fn = fun({X,T1,T2}) -> io:format("~p    ~p    ~p~n", [X,T1,T2]) end,
+            io:format("count   seq   parallel~n"),
+            lists:map(Fn, Acc);
+        PuzzleFile =/= false ->
+            {ok, Puzzles} = file:consult(PuzzleFile),
+            Fn = fun(Tbl) -> {erlang:trunc(math:sqrt(size(Tbl))), Tbl} end,
+            Time=solve( lists:map(Fn, Puzzles), [] ),
+            io:format("Time taken to evaluate: ~puS~n", [Time]);
         Genpath == true ->
-            genpathological(Complx, D);
+            Table = genpathological(Complx, D),
+            io:format("~nPathological combination ~n~p~n", [Table]);
         true ->
             io:format("complexity:~p count:~p difficulty:~p seed:~p~n",
                       [Complx, N, D, Seed]),
-            Time = run(Complx, N, D, Seed),
-            io:format("Time taken to evaluate ~puS~n", [Time])
+            Tables = [
+                {Complx, sudoku_gen:generate(switching, Seed+X, Complx, D)}
+                || X <- lists:seq(1, N)
+            ],
+            Time = solve(Tables, []),
+            lists:map(fun(Tbl) -> io:format("~p~n", [Tbl]) end, Tables),
+            io:format("Time taken to evaluate: ~puS~n", [Time])
     end,
     application:stop(sudoku),
     erlang:halt().
 
 
+% Command handlers
+benchmark(0, _, Acc) -> lists:reverse(Acc);
+benchmark(N, Tables, Acc) ->
+    {ok, Procs} = application:get_env(sudoku, procs),
+    application:set_env(sudoku, procs, Procs+N),
+    {Tbls, _} = lists:split(N, Tables),
+    Time1 = solve(Tbls, []),
+    {Time2, _} = timer:tc( sudoku_slv, psolve, [Tbls] ),
+    benchmark(N-1, Tables, [{N, Time1, Time2} | Acc]).
+
+benchmark(Complx, N, D, Seed) ->
+    Tables = tables(Complx, N, D, Seed),
+    benchmark(N, Tables, []).
+
+
+genpathological(Complx, D) ->
+    {_,_,Seed} = now(),
+    Table = sudoku_gen:generate(switching, Seed, Complx, D),
+    case timer:tc( sudoku_slv, solve, [Complx, Table] ) of
+        {Time, _} when Time < 10000000-> genpathological(Complx, D);
+        _ -> Table
+    end.
+
+% Local functions
 solve([], Acc) -> lists:sum(Acc);
 solve([{Complx, Table} | Tables], Acc) ->
     {Time, {passed, _OkTbl}} = timer:tc( sudoku_slv, solve, [Complx, Table] ),
     solve(Tables, [Time | Acc]).
 
 
-psolve(Tables) ->
-    {Time, _} = timer:tc( sudoku_slv, psolve, [Tables] ),
-    Time.
-
-
-run(Complx, N, D, Seed) ->
-    Tables = [ {Complx, sudoku_gen:generate(switching, Seed+X, Complx, D)} ||
-               X <- lists:seq(1,N) ],
-    solve(Tables, []).
-
-
-benchmark(0, _) -> ok;
-benchmark(N, Tables) ->
-    {ok, Procs} = application:get_env(sudoku, procs),
-    application:set_env(sudoku, procs, Procs+N),
-    {Tbls, _} = lists:split(N, Tables),
-    Time1 = solve(Tbls, []),
-    Time2 = psolve(Tbls),
-    io:format("~p    ~p    ~p~n", [N, Time1, Time2]),
-    benchmark(N-1, Tables).
-
-benchmark(Complx, N, D, Seed) ->
-    Tables = tables(Complx, N, D, Seed),
-    benchmark(N, Tables).
-
-tables(Complx, N, D, Seed) when N > 94 ->
-    Tables = [ {Complx, sudoku_gen:generate(switching, Seed+X, Complx, D)} ||
-               X <- lists:seq(1,N-1) ],
-    {T1, T2} = lists:split(94, Tables),
-    T1 ++ [{3,patholo3()}] ++ T2;
-
 tables(Complx, N, D, Seed) ->
     [ {Complx, sudoku_gen:generate(switching, Seed+X, Complx, D)} ||
       X <- lists:seq(1,N) ].
-
-
-genpathological(Complx, D) ->
-    {_,_,Seed} = now(),
-    Table = sudoku_gen:generate(switching, Seed, Complx, D),
-    io:format("~p~n", [Table]),
-    case timer:tc( sudoku_slv, solve, [Complx, Table] ) of
-        {Time, _} when Time < 10000000-> genpathological(Complx, D);
-        _ -> io:format("~nPathological combination ~n~p~n", [Table])
-    end.
-
-
-patholo3() ->
-    {{0,0,2,0,0,4,0,0,9},
-     {0,0,0,0,0,9,0,0,0},
-     {0,6,0,0,0,0,0,4,8},
-     {0,3,5,0,0,0,0,0,0},
-     {0,0,6,0,0,0,1,0,0},
-     {0,9,0,0,0,5,0,0,4},
-     {4,0,0,0,5,0,0,0,0},
-     {6,0,0,0,0,2,0,0,0},
-     {9,0,0,0,4,6,0,0,0}}.
-
-
 
 %d2_table() ->
 %    { { 0, 0, 0, 1 },
