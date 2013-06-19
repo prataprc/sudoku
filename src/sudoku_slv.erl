@@ -82,6 +82,9 @@ handle_info( {'EXIT', Pid, {invalid, _}=Res}, State )->
 handle_info( {'EXIT', Pid, {psolve, Results}}, State )->
     From = proplists:get_value(Pid, State),
     gen_server:reply(From, Results),
+    {noreply, proplists:delete(Pid, State)};
+
+handle_info( {'EXIT', Pid, normal}, State )->
     {noreply, proplists:delete(Pid, State)}.
 
 terminate( Reason, State )->

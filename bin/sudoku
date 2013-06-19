@@ -1,6 +1,6 @@
 #!/usr/bin/env escript
 %% -*- erlang -*-
-%%! +S 2:2
+%%! -smp disable
 
 -include_lib("sudoku/include/sudoku.hrl").
 
@@ -46,8 +46,10 @@ main(Args) ->
             io:format("complexity:~p count:~p difficulty:~p seed:~p~n",
                       [Complx, N, D, Seed]),
             Acc = benchmark(Complx, N, D, Seed),
-            Fn = fun({X,T1,T2}) -> io:format("~p    ~p    ~p~n", [X,T1,T2]) end,
-            io:format("count   seq   parallel~n"),
+            Fn = fun({X,T1,T2,T3,T4}) ->
+                    io:format("~p    ~p    ~p    ~p    ~p~n", [X,T1,T2,T3,T4])
+                 end,
+            io:format("count   seq     parallel    seq-conc     par-conc~n"),
             lists:map(Fn, Acc);
         PuzzleFile =/= false ->
             {ok, Puzzles} = file:consult(PuzzleFile),
@@ -71,16 +73,26 @@ main(Args) ->
     application:stop(sudoku),
     erlang:halt().
 
-
 % Command handlers
-benchmark(0, _, Acc) -> lists:reverse(Acc);
-benchmark(N, Tables, Acc) ->
+benchmark(0, _, Acc) -> Acc;
+benchmark(N, AllTbls, Acc) ->
     {ok, Procs} = application:get_env(sudoku, procs),
-    application:set_env(sudoku, procs, Procs+N),
-    {Tbls, _} = lists:split(N, Tables),
-    Time1 = solve(Tbls, []),
-    {Time2, _} = timer:tc( sudoku_slv, psolve, [Tbls] ),
-    benchmark(N-1, Tables, [{N, Time1, Time2} | Acc]).
+    application:set_env(sudoku, procs, Procs+100),
+    {Tables, _} = lists:split(N, AllTbls),
+
+    % Time taken to solve the puzzles sequentially.
+    SeqTime = solve(Tables, []),
+    % Time taken to solve puzzles simultaneously.
+    {ParTime, _} = timer:tc( sudoku_slv, psolve, [Tables] ),
+
+    application:set_env(sudoku, concurrent, true),
+
+    % Time taken to solve the puzzles sequentially - in concurrent mode.
+    SeqTimeC = solve(Tables, []),
+    % Time taken to solve puzzles simultaneously.
+    {ParTimeC, _} = timer:tc( sudoku_slv, psolve, [Tables] ),
+
+    benchmark(N-1, Tables, [{N, SeqTime, ParTime, SeqTimeC, ParTimeC} | Acc]).
 
 benchmark(Complx, N, D, Seed) ->
     Tables = tables(Complx, N, D, Seed),

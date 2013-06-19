@@ -134,7 +134,7 @@ previous run in concurrent mode,
 
 A more detailed analysis of erlang VM is available in this
 `article <http://prataprc.github.io/sudoku-in-erlang.html>`_. For queries
-please post to be directly via prataprc (at) gmail.com.
+please post directly to prataprc (at) gmail.com.
 
 Have a nice time,
 
